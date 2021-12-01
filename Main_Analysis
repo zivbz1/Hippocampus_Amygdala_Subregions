@@ -1,0 +1,445 @@
+---
+title: "Linear Mixed Model - Hippocampus Paper" Version 0.0.1
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library, echo=FALSE}
+library(haven)
+library(tidyverse)
+library(nlme)
+library(lmerTest)
+library(emmeans)
+
+```("C:/Users/zhb4/OneDrive - Yale University/Desktop/My Publications/13. Hippocampus Paper with Arik/Data & Results/Final Dataset 4.11.21.sav")
+
+```{r import, echo=FALSE}
+Final_Dataset_4_11_21 <- read_sav
+```
+
+```{r import, echo=FALSE}
+# Transform data into long/wide format for the analysis 
+	data_long <- Final_Dataset_4_11_21 %>%
+    # adding new Time variable while preserving the existing ones
+	  mutate(Time1 = 1,Time2 = 2, Time3 = 3) %>% 
+    # creating an indicator for all varaibles, whether its Time 1, Time 2 or Time 3 
+	  gather(Indicator, Time, -c(SubjectID:BilateralHippocampusT3_ICV)) %>% 
+    # adding an outcome measure which is the left hippocampal volume at each time-point. Now instead of one row per subject we get rows per subject (T1, T2, T3)
+	  mutate(left_HC_Vol = case_when(Time == 1 ~ LeftHippocampusT1, 
+	                             Time == 2 ~ LeftHippocampusT2, 
+	                             Time == 3 ~ LeftHippocampusT3))
+```
+
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  Performing linear mixed model for all subjects across all time-points (n=141, those who have trajectory)  
+	LME_LeftHippocampus <- lme(left_HC_Vol ~ as.factor(Time) * as.factor(Clinical_Trajectory) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long,
+	                na.action = "na.exclude")
+	summary(LME_LeftHippocampus)
+```
+
+```{r marginal means, echo=FALSE, message=TRUE, warning=TRUE}
+
+emmeans(LME_LeftHippocampus, ~ Clinical_Trajectory*Time)
+```
+
+```{r viz means, echo=FALSE, message=TRUE, warning=TRUE}
+## Extract adjusted means
+Adjusted_means_fix <- as_tibble(emmeans(LME_LeftHippocampus, ~ Clinical_Trajectory*Time)) %>% 
+  mutate(Time = as.factor(Time))
+
+ggplot(Adjusted_means_fix, aes(x=Time, y = left_HC_Vol)) +
+  geom_line(data = Adjusted_means_fix , aes(x = as.factor(Time), y = emmean, 
+                                            group = as.factor(Clinical_Trajectory),
+                                            color= as.factor(Clinical_Trajectory)), 
+            linetype = 1) +
+  geom_point(data = Adjusted_means_fix, aes(x = Time, y = emmean, 
+                                           group = as.factor(Clinical_Trajectory),
+                                            color= as.factor(Clinical_Trajectory)),
+             size = 1.5) +
+  #geom_errorbar(data = Adjusted_means_fix, aes(x = Time, y = emmean, 
+  #                                             ymin = lower.CL, ymax = upper.CL,
+  #                                              color= as.factor(Clinical_Trajectory)), 
+  #              width = .1) +
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(4000, 4300),
+                     breaks = c(4000, 4100, 4200, 4300)) +
+  scale_x_discrete(
+    breaks = c(1,2,3),
+    label = c("T1", "T2", "T3")) +
+  ylab("Left Hippo Volume") +
+  xlab("Study Period") +
+  theme_cowplot() +
+  scale_color_manual(values=c("#2F5763FF", "#F7941DFF", "#79af97"),
+                     labels = c("Low syptoms", "Recobery", "persistent PTSD")) +
+  theme(
+    plot.title = element_text(size=11),
+    axis.title.x = element_text(size=11, 
+                                margin = margin(t = 5, r = 0, b = 0, l = 0), 
+                                colour = "black"),
+    axis.title.y = element_text(size=11, 
+                                margin = margin(t = 0, r = 5, b = 0, l = 0), 
+                                colour = "black"),
+    axis.text.x = element_text(size=11, color = "black"),
+    axis.text.y = element_text(size=11, color = "black", 
+                               margin = margin(t = 0, r = 2, b = 0, l = 0)),
+    axis.ticks = element_line(colour = "black", size=0.4),
+    panel.grid.major.x = element_blank(), 
+    panel.grid.major.y = element_line(size=.2, color="grey66"), 
+    panel.grid.minor.y = element_blank(), 
+    panel.grid.minor.x = element_blank())
+    #legend.position = c(.99, .50),
+    #legend.title = element_blank(),
+    #legend.margin = margin(t = 3, r = 2, b = 3, l = 2),
+    #legend.box.background = element_rect(fill = "white", color="black", size=0.4),
+    #legend.box.margin = margin(t = 3, r = 2, b = 3, l = 2))
+
+```
+
+
+
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  Across all individuals (ignoring the clinical trajectory)  
+	LME_LeftHippocampus <- lme(left_HC_Vol ~ as.factor(Time) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long,
+	                na.action = "na.exclude")
+	summary(LME_LeftHippocampus)
+```
+
+```{r import, echo=FALSE}
+# Transform for analysis, Right Hippocampal Volume  
+	data_long <- Final_Dataset_4_11_21 %>%
+	  mutate(Time1 = 1,
+	         Time2 = 2,
+	         Time3 = 3) %>% 
+	  gather(Indicator, Time, -c(SubjectID:BilateralHippocampusT3_ICV)) %>% 
+	  mutate(right_HC_Vol = case_when(Time == 1 ~ RightHippocampusT1, 
+	                             Time == 2 ~ RightHippocampusT2, 
+	                             Time == 3 ~ RightHippocampusT3))
+```
+
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  Performing linear mixed model for all subjects across all time-points (n=141, those who have trajectory)  
+	LME_RightHippocampus <- lme(right_HC_Vol ~ as.factor(Time) * as.factor(Clinical_Trajectory) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long,
+	                na.action = "na.exclude")
+	summary(LME_RightHippocampus)
+```
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  Across all individuals (ignoring the clinical trajectory)  
+	LME_RightHippocampus <- lme(right_HC_Vol ~ as.factor(Time) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long,
+	                na.action = "na.exclude")
+	summary(LME_RightHippocampus)
+```
+
+```{r import, echo=FALSE}
+# Transform for analysis, Left Hippocampal Volume, only the two trajectories (excluding Subthreshold)  
+	data_long_II <- Final_Dataset_4_11_21 %>%
+  filter(Clinical_Trajectory > 1) %>%
+	  mutate(Time1 = 1,
+	         Time2 = 2,
+	         Time3 = 3) %>% 
+	  gather(Indicator, Time, -c(SubjectID:BilateralHippocampusT3_ICV)) %>% 
+	  mutate(left_HC = case_when(Time == 1 ~ LeftHippocampusT1, 
+	                             Time == 2 ~ LeftHippocampusT2, 
+	                             Time == 3 ~ LeftHippocampusT3))
+
+```
+
+
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  only the two trajectories (excluding Subthreshold), All TPs 
+	LME_LeftHippocampus_2groups <- lme(left_HC ~ as.factor(Time) * as.factor(Clinical_Trajectory) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long_II,
+	                na.action = "na.exclude")
+	summary(LME_LeftHippocampus_2groups)
+```
+```{r import, echo=FALSE}
+# Transform for analysis, Right Hippocampal Volume, only the two trajectories (excluding Subthreshold)  
+	data_long_II <- Final_Dataset_4_11_21 %>%
+  filter(Clinical_Trajectory > 1) %>%
+	  mutate(Time1 = 1,
+	         Time2 = 2,
+	         Time3 = 3) %>% 
+	  gather(Indicator, Time, -c(SubjectID:BilateralHippocampusT3_ICV)) %>% 
+	  mutate(right_HC = case_when(Time == 1 ~ RightHippocampusT1, 
+	                             Time == 2 ~ RightHippocampusT2, 
+	                             Time == 3 ~ RightHippocampusT3))
+```
+
+
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  only the two trajectories (excluding Subthreshold), All TPs 
+	LME_RightHippocampus_2groups <- lme(right_HC ~ as.factor(Time) * as.factor(Clinical_Trajectory) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long_II,
+	                na.action = "na.exclude")
+	summary(LME_RightHippocampus_2groups)
+```
+
+
+
+```{r import, echo=FALSE}
+# Transform for analysis, Right Hippocampal Volume  
+	data_long_II <- Final_Dataset_4_11_21 %>%
+  filter(Clinical_Trajectory > 1) %>%
+	  mutate(Time1= 0,
+	         Time3= 1) %>% 
+	  gather(Indicator, Time, -c(SubjectID:BilateralHippocampusT3_ICV)) %>% 
+	  mutate(Outcome = case_when(Time == 0~ RightHippocampusT1, 
+	                             Time == 1~ RightHippocampusT3))
+```
+
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  Only Trajectories 2 & 3, Only TP1 & TP3 
+	LME_CS_II <- lme(Outcome ~ as.factor(Time) * as.factor(Clinical_Trajectory) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long_II,
+	                na.action = "na.exclude")
+	summary(LME_CS_II)
+```---
+title: "Linear Mixed Model - Hippocampus Paper" Version 0.0.1
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library, echo=FALSE}
+library(haven)
+library(tidyverse)
+library(nlme)
+library(lmerTest)
+library(emmeans)
+
+```("C:/Users/zhb4/OneDrive - Yale University/Desktop/My Publications/13. Hippocampus Paper with Arik/Data & Results/Final Dataset 4.11.21.sav")
+
+```{r import, echo=FALSE}
+Final_Dataset_4_11_21 <- read_sav
+```
+
+```{r import, echo=FALSE}
+# Transform data into long/wide format for the analysis 
+	data_long <- Final_Dataset_4_11_21 %>%
+    # adding new Time variable while preserving the existing ones
+	  mutate(Time1 = 1,Time2 = 2, Time3 = 3) %>% 
+    # creating an indicator for all varaibles, whether its Time 1, Time 2 or Time 3 
+	  gather(Indicator, Time, -c(SubjectID:BilateralHippocampusT3_ICV)) %>% 
+    # adding an outcome measure which is the left hippocampal volume at each time-point. Now instead of one row per subject we get rows per subject (T1, T2, T3)
+	  mutate(left_HC_Vol = case_when(Time == 1 ~ LeftHippocampusT1, 
+	                             Time == 2 ~ LeftHippocampusT2, 
+	                             Time == 3 ~ LeftHippocampusT3))
+```
+
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  Performing linear mixed model for all subjects across all time-points (n=141, those who have trajectory)  
+	LME_LeftHippocampus <- lme(left_HC_Vol ~ as.factor(Time) * as.factor(Clinical_Trajectory) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long,
+	                na.action = "na.exclude")
+	summary(LME_LeftHippocampus)
+```
+
+```{r marginal means, echo=FALSE, message=TRUE, warning=TRUE}
+
+emmeans(LME_LeftHippocampus, ~ Clinical_Trajectory*Time)
+```
+
+```{r viz means, echo=FALSE, message=TRUE, warning=TRUE}
+## Extract adjusted means
+Adjusted_means_fix <- as_tibble(emmeans(LME_LeftHippocampus, ~ Clinical_Trajectory*Time)) %>% 
+  mutate(Time = as.factor(Time))
+
+ggplot(Adjusted_means_fix, aes(x=Time, y = left_HC_Vol)) +
+  geom_line(data = Adjusted_means_fix , aes(x = as.factor(Time), y = emmean, 
+                                            group = as.factor(Clinical_Trajectory),
+                                            color= as.factor(Clinical_Trajectory)), 
+            linetype = 1) +
+  geom_point(data = Adjusted_means_fix, aes(x = Time, y = emmean, 
+                                           group = as.factor(Clinical_Trajectory),
+                                            color= as.factor(Clinical_Trajectory)),
+             size = 1.5) +
+  #geom_errorbar(data = Adjusted_means_fix, aes(x = Time, y = emmean, 
+  #                                             ymin = lower.CL, ymax = upper.CL,
+  #                                              color= as.factor(Clinical_Trajectory)), 
+  #              width = .1) +
+  scale_y_continuous(expand = c(0,0),
+                     limits = c(4000, 4300),
+                     breaks = c(4000, 4100, 4200, 4300)) +
+  scale_x_discrete(
+    breaks = c(1,2,3),
+    label = c("T1", "T2", "T3")) +
+  ylab("Left Hippo Volume") +
+  xlab("Study Period") +
+  theme_cowplot() +
+  scale_color_manual(values=c("#2F5763FF", "#F7941DFF", "#79af97"),
+                     labels = c("Low syptoms", "Recobery", "persistent PTSD")) +
+  theme(
+    plot.title = element_text(size=11),
+    axis.title.x = element_text(size=11, 
+                                margin = margin(t = 5, r = 0, b = 0, l = 0), 
+                                colour = "black"),
+    axis.title.y = element_text(size=11, 
+                                margin = margin(t = 0, r = 5, b = 0, l = 0), 
+                                colour = "black"),
+    axis.text.x = element_text(size=11, color = "black"),
+    axis.text.y = element_text(size=11, color = "black", 
+                               margin = margin(t = 0, r = 2, b = 0, l = 0)),
+    axis.ticks = element_line(colour = "black", size=0.4),
+    panel.grid.major.x = element_blank(), 
+    panel.grid.major.y = element_line(size=.2, color="grey66"), 
+    panel.grid.minor.y = element_blank(), 
+    panel.grid.minor.x = element_blank())
+    #legend.position = c(.99, .50),
+    #legend.title = element_blank(),
+    #legend.margin = margin(t = 3, r = 2, b = 3, l = 2),
+    #legend.box.background = element_rect(fill = "white", color="black", size=0.4),
+    #legend.box.margin = margin(t = 3, r = 2, b = 3, l = 2))
+
+```
+
+
+
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  Across all individuals (ignoring the clinical trajectory)  
+	LME_LeftHippocampus <- lme(left_HC_Vol ~ as.factor(Time) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long,
+	                na.action = "na.exclude")
+	summary(LME_LeftHippocampus)
+```
+
+```{r import, echo=FALSE}
+# Transform for analysis, Right Hippocampal Volume  
+	data_long <- Final_Dataset_4_11_21 %>%
+	  mutate(Time1 = 1,
+	         Time2 = 2,
+	         Time3 = 3) %>% 
+	  gather(Indicator, Time, -c(SubjectID:BilateralHippocampusT3_ICV)) %>% 
+	  mutate(right_HC_Vol = case_when(Time == 1 ~ RightHippocampusT1, 
+	                             Time == 2 ~ RightHippocampusT2, 
+	                             Time == 3 ~ RightHippocampusT3))
+```
+
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  Performing linear mixed model for all subjects across all time-points (n=141, those who have trajectory)  
+	LME_RightHippocampus <- lme(right_HC_Vol ~ as.factor(Time) * as.factor(Clinical_Trajectory) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long,
+	                na.action = "na.exclude")
+	summary(LME_RightHippocampus)
+```
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  Across all individuals (ignoring the clinical trajectory)  
+	LME_RightHippocampus <- lme(right_HC_Vol ~ as.factor(Time) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long,
+	                na.action = "na.exclude")
+	summary(LME_RightHippocampus)
+```
+
+```{r import, echo=FALSE}
+# Transform for analysis, Left Hippocampal Volume, only the two trajectories (excluding Subthreshold)  
+	data_long_II <- Final_Dataset_4_11_21 %>%
+  filter(Clinical_Trajectory > 1) %>%
+	  mutate(Time1 = 1,
+	         Time2 = 2,
+	         Time3 = 3) %>% 
+	  gather(Indicator, Time, -c(SubjectID:BilateralHippocampusT3_ICV)) %>% 
+	  mutate(left_HC = case_when(Time == 1 ~ LeftHippocampusT1, 
+	                             Time == 2 ~ LeftHippocampusT2, 
+	                             Time == 3 ~ LeftHippocampusT3))
+
+```
+
+
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  only the two trajectories (excluding Subthreshold), All TPs 
+	LME_LeftHippocampus_2groups <- lme(left_HC ~ as.factor(Time) * as.factor(Clinical_Trajectory) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long_II,
+	                na.action = "na.exclude")
+	summary(LME_LeftHippocampus_2groups)
+```
+```{r import, echo=FALSE}
+# Transform for analysis, Right Hippocampal Volume, only the two trajectories (excluding Subthreshold)  
+	data_long_II <- Final_Dataset_4_11_21 %>%
+  filter(Clinical_Trajectory > 1) %>%
+	  mutate(Time1 = 1,
+	         Time2 = 2,
+	         Time3 = 3) %>% 
+	  gather(Indicator, Time, -c(SubjectID:BilateralHippocampusT3_ICV)) %>% 
+	  mutate(right_HC = case_when(Time == 1 ~ RightHippocampusT1, 
+	                             Time == 2 ~ RightHippocampusT2, 
+	                             Time == 3 ~ RightHippocampusT3))
+```
+
+
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  only the two trajectories (excluding Subthreshold), All TPs 
+	LME_RightHippocampus_2groups <- lme(right_HC ~ as.factor(Time) * as.factor(Clinical_Trajectory) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long_II,
+	                na.action = "na.exclude")
+	summary(LME_RightHippocampus_2groups)
+```
+
+
+
+```{r import, echo=FALSE}
+# Transform for analysis, Right Hippocampal Volume  
+	data_long_II <- Final_Dataset_4_11_21 %>%
+  filter(Clinical_Trajectory > 1) %>%
+	  mutate(Time1= 0,
+	         Time3= 1) %>% 
+	  gather(Indicator, Time, -c(SubjectID:BilateralHippocampusT3_ICV)) %>% 
+	  mutate(Outcome = case_when(Time == 0~ RightHippocampusT1, 
+	                             Time == 1~ RightHippocampusT3))
+```
+
+```{r Covar structures, echo=FALSE, message=TRUE, warning=TRUE}
+	#  Only Trajectories 2 & 3, Only TP1 & TP3 
+	LME_CS_II <- lme(Outcome ~ as.factor(Time) * as.factor(Clinical_Trajectory) + 
+	                Gender + Age + EstimatedTotalIntraCranialVolT1,
+	                random = ~ 1 | SubjectID, 
+	                correlation = corCompSymm(form= ~ 1 | SubjectID),
+	                data=data_long_II,
+	                na.action = "na.exclude")
+	summary(LME_CS_II)
+```
