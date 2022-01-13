@@ -1,0 +1,954 @@
+---
+title: "Longitudinal Analysis PTSD"
+output:
+  html_document:
+    df_print: paged
+---
+ 
+Main Aim: 
+1a. Examine whether there are significant time-dependent changes (T1-T2-T3) in hippocampal or amygdala volume between the two trajectories (Recovery vs. chronic PTSD) or across all individuals?
+1b. Explore those time-dependent changes in amygdala and hippocampal subregions. 
+
+Secondary Aim: 
+2a. Examine whether there are significant differences in hippocampal or amygdala volume at one-month post-trauma (T1) between the two trajectories (Recovery vs. chronic PTSD)?
+2b: Explore those initial volume differences in amygdala and hippocampal subregions. 
+
+Load libraries
+```{r include=FALSE}
+library('stringr')
+library('haven')
+library('lme4')
+library('lmerTest')
+library('ggplot2')
+library('psych')
+library('rstatix')
+library('sjPlot')
+library('reshape2')
+library('effectsize')
+library('heplots')
+library('dplyr')
+library('emmeans')
+```
+
+Open files
+```{r}
+#open subregions long (scans>1)
+#open subregions (scan=1)
+#open aseg data
+aseg <- read.csv('./data/aseg_stats211222.txt', sep = '\t')
+clinical <- read_sav('./data/Final Dataset 4.11.21.sav')
+aseg_t1 = aseg[!grepl("long", aseg$Measure.volume),]
+aseg_t1 = aseg_t1[!grepl("T2", aseg_t1$Measure.volume),]
+aseg_t1 = aseg_t1[!grepl("T3", aseg_t1$Measure.volume),]
+row.names(aseg_t1) <- NULL
+aseg_t1['sub'] <- (str_split_fixed(aseg_t1$Measure.volume, "_", 2)[,2])
+clinical['sub'] <- sprintf("%04d", clinical$SubjectID)
+clinical <- clinical[,c(ncol(clinical),1:(ncol(clinical)-1))]
+```
+
+Organize Data 
+```{r}
+#merge anatomical & clinical data by subject
+aseg_t1 <- merge(aseg_t1, clinical[,1:5], by='sub')
+aseg_t1_PTSD <- subset(aseg_t1, Clinical_Trajectory > 1)
+
+#recode clinical trajectory and gender
+aseg_t1_PTSD <- aseg_t1_PTSD %>% 
+  mutate(Clinical_Trajectory = case_when(Clinical_Trajectory == 2 ~ "Recovery",
+                                         Clinical_Trajectory == 3 ~ "PTSD"),
+         Gender = case_when(Gender == 0 ~ "Male",
+                            Gender == 1 ~ "Female"))
+```
+
+1a. Linear Mixed Models examining group differences in hippocampus and amygdala at T1 (Recovery vs. chronic PTSD)
+```{r}
+#Left amygdala
+T1_amygdala_l = lm(Left.Amygdala  ~ Clinical_Trajectory + 
+                     Age + Gender + EstimatedTotalIntraCranialVol,
+                   data = aseg_t1_PTSD)
+#Right amygdala
+T1_amygdala_r = lm(Right.Amygdala ~ Clinical_Trajectory + 
+                     Age + Gender + EstimatedTotalIntraCranialVol,
+                   data = aseg_t1_PTSD)
+#Left hippocampus
+T1_hippo_l = lm(Left.Hippocampus  ~ Clinical_Trajectory + 
+                  Age + Gender + EstimatedTotalIntraCranialVol,
+                data = aseg_t1_PTSD)
+#Right hippocampus
+T1_hippo_r = lm(Right.Hippocampus ~ Clinical_Trajectory + 
+                  Age + Gender + EstimatedTotalIntraCranialVol,
+                data = aseg_t1_PTSD)
+```
+
+Left amygdala model
+```{r}
+summary(T1_amygdala_l)
+```
+Left amygdala marginal means
+```{r}
+emmeans(T1_amygdala_l, ~ Clinical_Trajectory)
+```
+Right amygdala model
+```{r}
+summary(T1_amygdala_r)
+```
+
+Right amygdala marginal means
+```{r}
+emmeans(T1_amygdala_r, ~ Clinical_Trajectory)
+```
+
+Left Hippocampus model
+```{r}
+summary(T1_hippo_l)
+```
+
+Left Hippocampus marginal means
+```{r}
+emmeans(T1_hippo_l, ~ Clinical_Trajectory)
+```
+
+Right Hippocampus model
+```{r}
+summary(T1_hippo_r)
+```
+
+Right Hippocampus marginal means
+```{r}
+emmeans(T1_hippo_r, ~ Clinical_Trajectory)
+```
+
+1a. Results: Non-significant differences between groups in hippocampus or amygdala at T1 (Recovery vs. chronic PTSD)
+
+
+Load & organize subregions data for T1
+
+```{r}
+hl_sr <- read.csv('./data/hipposubfields_l.txt', sep = '\t')
+hr_sr <- read.csv('./data/hipposubfields_r.txt', sep = '\t')
+al_sr <- read.csv('./data/amygsubfields_l.txt' , sep = '\t')
+ar_sr <- read.csv('./data/amygsubfields_r.txt', sep = '\t')
+
+hl_sr['time'] <- str_split_fixed(hl_sr$Measure.volume, "_", 2)[,1]
+hl_sr['sub']  <- str_split_fixed(hl_sr$Measure.volume, "_", 2)[,2]
+
+hr_sr['time'] <- str_split_fixed(hl_sr$Measure.volume, "_", 2)[,1]
+hr_sr['sub']  <- str_split_fixed(hl_sr$Measure.volume, "_", 2)[,2]
+
+al_sr['time'] <- str_split_fixed(hl_sr$Measure.volume, "_", 2)[,1]
+al_sr['sub']  <- str_split_fixed(hl_sr$Measure.volume, "_", 2)[,2]
+
+ar_sr['time'] <- str_split_fixed(hl_sr$Measure.volume, "_", 2)[,1]
+ar_sr['sub']  <- str_split_fixed(hl_sr$Measure.volume, "_", 2)[,2]
+
+hl_sr <- merge(hl_sr, clinical[,1:5], by='sub')
+hr_sr <- merge(hr_sr, clinical[,1:5], by='sub')
+al_sr <- merge(al_sr, clinical[,1:5], by='sub')
+ar_sr <- merge(ar_sr, clinical[,1:5], by='sub')
+
+hl_sr <- subset(hl_sr, Clinical_Trajectory > 1)
+hr_sr <- subset(hr_sr, Clinical_Trajectory > 1)
+al_sr <- subset(al_sr, Clinical_Trajectory > 1)
+ar_sr <- subset(ar_sr, Clinical_Trajectory > 1)
+```
+
+
+1b. Linear Mixed Models examining group differences in hippocampus and amygdala subregions at T1 (Recovery vs. chronic PTSD)
+
+We will start with the amygdala, first with only the main subregions and then exploratory analysis of the other subregions
+
+Main Amygdala subregions (n=3): 
+Lateral nucleus
+Basal nucleus
+Central nucleus
+
+```{r}
+#Left Amygdala - lateral, basal, central
+T1_amygdala_l_l = lm(Lateral.nucleus  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala, data = al_sr)
+T1_amygdala_l_b = lm(Basal.nucleus    ~ Clinical_Trajectory + Age + Gender + Whole_amygdala, data = al_sr)
+T1_amygdala_l_c = lm(Central.nucleus  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala, data = al_sr)
+
+#Right Amygdala - lateral, basal, central
+T1_amygdala_r_l = lm(Lateral.nucleus  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = ar_sr)
+T1_amygdala_r_b = lm(Basal.nucleus    ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = ar_sr)
+T1_amygdala_r_c = lm(Central.nucleus  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = ar_sr)
+```
+
+Left Lateral Nucleus marginal model
+```{r}
+summary(T1_amygdala_l_l)
+```
+Left Lateral Nucleus marginal means
+```{r}
+emmeans(T1_amygdala_l_l, ~ Clinical_Trajectory)
+```
+Left Basal Nucleus marginal model
+```{r}
+summary(T1_amygdala_l_b)
+```
+Left Basal Nucleus marginal means
+```{r}
+emmeans(T1_amygdala_l_b, ~ Clinical_Trajectory)
+```
+Left Central Nucleus marginal model
+```{r}
+summary(T1_amygdala_l_c)
+```
+Left Central Nucleus marginal means
+```{r}
+emmeans(T1_amygdala_l_c, ~ Clinical_Trajectory)
+```
+
+
+Right Lateral Nucleus marginal model
+```{r}
+summary(T1_amygdala_r_l)
+```
+Right Lateral Nucleus marginal means
+```{r}
+emmeans(T1_amygdala_r_l, ~ Clinical_Trajectory)
+```
+Right Basal Nucleus marginal model
+```{r}
+summary(T1_amygdala_r_b)
+```
+Right Basal Nucleus marginal means
+```{r}
+emmeans(T1_amygdala_r_b, ~ Clinical_Trajectory)
+```
+Right Central Nucleus marginal model
+```{r}
+summary(T1_amygdala_r_c)
+```
+Right Central Nucleus marginal means
+```{r}
+emmeans(T1_amygdala_r_c, ~ Clinical_Trajectory)
+```
+
+Measuring effect size for the significant effect
+```{r}
+effectsize::standardize_parameters(T1_amygdala_l_c)
+etasq(T1_amygdala_l_c)
+emmeans(T1_amygdala_l_c, ~ Clinical_Trajectory)
+```
+
+Organize p-values for multiple comparisons 
+```{r}
+Ps <- c(summary(T1_amygdala_l_l)$coefficients[2,4],
+        summary(T1_amygdala_l_b)$coefficients[2,4],
+        summary(T1_amygdala_l_c)$coefficients[2,4],
+        summary(T1_amygdala_r_l)$coefficients[2,4],
+        summary(T1_amygdala_r_b)$coefficients[2,4],
+        summary(T1_amygdala_r_c)$coefficients[2,4]
+)
+
+Ps 
+```
+
+FDR correction for multiple comparisons 
+```{r}
+p.adjust(Ps, method = "fdr", n = length(Ps))
+```
+
+1b. Results: After FDR correction for multiple comparisons, there are no significant differences between groups (Recovery vs. chronic PTSD)in amygdala subregions at T1. 
+There was one significant effect in the left Central Nucleus of the Amygdala (p = 0.0218) with medium effect size (eta^2= 0.054), indicating larger amygdala volume in the Chronic PTSD group compared to the Recovery group. However, it did not survive FDR correction (p=0.131).
+
+
+Exploratory analysis of other amygdala subregions (n=6):
+Accessory Basal Nucleus
+Anterior Amygdaloid Area (AAA)
+Medial Nucleus
+Cortical Nucleus
+Corticoamygdaloid Transition Area
+Paralaminar Nucleus
+
+```{r}
+T1_amygdala_l_ABn = lm(Accessory.Basal.nucleus  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = al_sr)
+T1_amygdala_l_AAA = lm(Anterior.amygdaloid.area.AAA  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = al_sr)
+T1_amygdala_l_mn = lm(Medial.nucleus ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = al_sr)
+T1_amygdala_l_con = lm(Cortical.nucleus  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = al_sr)
+T1_amygdala_l_ct = lm(Corticoamygdaloid.transitio  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = al_sr)
+T1_amygdala_l_pn = lm(Paralaminar.nucleus  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = al_sr)
+
+T1_amygdala_r_ABn = lm(Accessory.Basal.nucleus  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = ar_sr)
+T1_amygdala_r_AAA = lm(Anterior.amygdaloid.area.AAA  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = ar_sr)
+T1_amygdala_r_mn = lm(Medial.nucleus ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = ar_sr)
+T1_amygdala_r_con = lm(Cortical.nucleus  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = ar_sr)
+T1_amygdala_r_ct = lm(Corticoamygdaloid.transitio  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = ar_sr)
+T1_amygdala_r_pn = lm(Paralaminar.nucleus  ~ Clinical_Trajectory + Age + Gender + Whole_amygdala,data = ar_sr)
+```
+
+```{r}
+summary(T1_amygdala_l_ABn)
+summary(T1_amygdala_l_AAA)
+summary(T1_amygdala_l_mn)
+summary(T1_amygdala_l_con)
+summary(T1_amygdala_l_ct)
+summary(T1_amygdala_l_pn)
+
+summary(T1_amygdala_r_ABn)
+summary(T1_amygdala_r_AAA)
+summary(T1_amygdala_r_mn)
+summary(T1_amygdala_r_con)
+summary(T1_amygdala_r_ct)
+summary(T1_amygdala_r_pn)
+```
+Exploratory analysis: no significant differences in any subregions between groups at T1. 
+
+
+We will continue with the amygdala, first with only the main subregions and then exploratory analysis of the other subregions
+
+
+Main Hippocampal subregions (n=4): 
+cornu ammonis 1 (CA1)
+cornu ammonis 2 (CA3) 
+Subiculum
+Dentate Gyrus (GC_ML_DG)
+
+*For all these regions, we have combined the head and body
+```{r}
+hr_sr['CA1'] = hr_sr$CA1.body + hr_sr$CA1.head
+hr_sr['CA3'] = hr_sr$CA3.body + hr_sr$CA3.head
+hr_sr['sub'] = hr_sr$subiculum.head + hr_sr$subiculum.body
+hr_sr['DG'] = hr_sr$GC.ML.DG.head + hr_sr$GC.ML.DG.body
+
+hl_sr['CA1'] = hr_sr$CA1.body + hr_sr$CA1.head
+hl_sr['CA3'] = hr_sr$CA3.body + hr_sr$CA3.head
+hl_sr['sub'] = hr_sr$subiculum.head + hr_sr$subiculum.body
+hl_sr['DG'] = hr_sr$GC.ML.DG.head + hr_sr$GC.ML.DG.body
+```
+
+Linear Mixed Models of hippocampal subregions between groups 
+```{r}
+Model_LH_ca1 <- lm(CA1 ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+Model_LH_ca3 <- lm(CA3 ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+Model_LH_sub <- lm(sub ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+Model_LH_dg  <- lm(DG  ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+
+Model_RH_ca1 <- lm(CA1 ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+Model_RH_ca3 <- lm(CA3 ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+Model_RH_sub <- lm(sub ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+Model_RH_dg  <- lm(DG  ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+```
+
+```{r}
+summary(Model_LH_ca1)
+```
+```{r}
+emmeans(Model_LH_ca1, ~ Clinical_Trajectory)
+```
+
+```{r}
+summary(Model_LH_ca3)
+```
+
+```{r}
+emmeans(Model_LH_ca3, ~ Clinical_Trajectory)
+```
+
+
+```{r}
+summary(Model_LH_sub)
+```
+
+```{r}
+emmeans(Model_LH_sub, ~ Clinical_Trajectory)
+```
+
+
+```{r}
+summary(Model_LH_dg)
+```
+
+```{r}
+emmeans(Model_LH_dg, ~ Clinical_Trajectory)
+```
+
+```{r}
+summary(Model_RH_ca1)
+```
+
+```{r}
+emmeans(Model_RH_ca1, ~ Clinical_Trajectory)
+```
+
+```{r}
+summary(Model_RH_ca3)
+```
+
+```{r}
+emmeans(Model_RH_ca3, ~ Clinical_Trajectory)
+```
+
+```{r}
+summary(Model_RH_sub)
+```
+
+```{r}
+emmeans(Model_RH_sub, ~ Clinical_Trajectory)
+```
+
+```{r}
+summary(Model_RH_dg)
+```
+
+```{r}
+emmeans(Model_RH_dg, ~ Clinical_Trajectory)
+```
+Measuring effect size for the significant effect
+```{r}
+effectsize::standardize_parameters(Model_LH_sub)
+etasq(Model_LH_sub)
+emmeans(Model_LH_sub, ~ Clinical_Trajectory)
+```
+
+Organize p-values for multiple comparisons 
+```{r}
+Ps <- c(summary(Model_LH_ca1)$coefficients[2,4],
+        summary(Model_LH_ca3)$coefficients[2,4],
+        summary(Model_LH_sub)$coefficients[2,4],
+        summary(Model_LH_dg)$coefficients[2,4],
+        summary(Model_RH_ca1)$coefficients[2,4],
+        summary(Model_RH_ca3)$coefficients[2,4],
+        summary(Model_RH_sub)$coefficients[2,4],
+        summary(Model_RH_dg)$coefficients[2,4]
+        )
+Ps
+```
+FDR Correction for multiple comparisons 
+```{r}
+p.adjust(Ps, method = "fdr", n = length(Ps))
+```
+1b. Results: After FDR correction for multiple comparisons, there are no significant differences between groups (Recovery vs. chronic PTSD)in hippocampal subregions at T1. 
+Before the correction, there was one marginally significant effect in the left CA1 (p=0.079) and one significant effect in the left Subiculum (p=0.032, eta^2=0.048), both indicating smaller hippocampal subregion volumes in the Chronic PTSD group compared to the Recovery group. However, they both did not survive FDR correction (p=0.225 for both).
+
+Exploratory analysis of other hippocampal subregions (n=9): 
+Hippocampal tail
+Hippocampal body
+Hippocampal head
+Hippocamapl fissure
+Presubiculum (head+body)
+Parasubiculum
+Molecular layer HP (head+body) 
+CA4 (head+body)
+Fimbria
+Hippocampal amygdala transition area (HATA)
+
+```{r}
+#combining subregions head & body
+hl_sr['presubiculum'] = hl_sr$presubiculum.head + hl_sr$presubiculum.body
+hl_sr['ML_HP'] = hl_sr$molecular_layer_HP.head + hl_sr$molecular_layer_HP.body
+hl_sr['CA4'] = hl_sr$CA4.head + hl_sr$CA4.body
+hr_sr['presubiculum'] = hr_sr$presubiculum.head + hr_sr$presubiculum.body
+hr_sr['ML_HP'] = hr_sr$molecular_layer_HP.head + hr_sr$molecular_layer_HP.body
+hr_sr['CA4'] = hr_sr$CA4.head + hr_sr$CA4.body
+```
+
+Linear Mixed Models
+```{r}
+Model_LH_tail <- lm(Hippocampal_tail ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+Model_LH_body <- lm(Whole_hippocampal_body ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+Model_LH_head <- lm(Whole_hippocampal_head ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+Model_LH_fissure  <- lm(hippocampal.fissure  ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+Model_LH_presubiculum  <- lm(presubiculum ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+Model_LH_ML_HP  <- lm(ML_HP ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+Model_LH_ML_ca4 <- lm(CA4 ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+Model_LH_ML_fimbria <- lm(fimbria ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+Model_LH_ML_HATA <- lm(HATA ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hl_sr)
+
+Model_RH_tail <- lm(Hippocampal_tail ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+Model_RH_body <- lm(Whole_hippocampal_body ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+Model_RH_head <- lm(Whole_hippocampal_head ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+Model_RH_fissure  <- lm(hippocampal.fissure  ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+Model_RH_presubiculum  <- lm(presubiculum ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+Model_RH_ML_HP  <- lm(ML_HP ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+Model_RH_ML_ca4 <- lm(CA4 ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+Model_RH_ML_fimbria <- lm(fimbria ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+Model_RH_ML_HATA <- lm(HATA ~ Clinical_Trajectory + Age + Gender + Whole_hippocampus, data = hr_sr)
+```
+
+```{r}
+summary(Model_LH_tail)
+summary(Model_LH_body)
+summary(Model_LH_head)
+summary(Model_LH_fissure)
+summary(Model_LH_presubiculum)
+summary(Model_LH_ML_HP)
+summary(Model_LH_ML_ca4)
+summary(Model_LH_ML_fimbria)
+summary(Model_LH_ML_HATA)
+
+summary(Model_RH_tail)
+summary(Model_RH_body)
+summary(Model_RH_head)
+summary(Model_RH_fissure)
+summary(Model_RH_presubiculum)
+summary(Model_RH_ML_HP)
+summary(Model_RH_ML_ca4)
+summary(Model_RH_ML_fimbria)
+summary(Model_RH_ML_HATA)
+```
+
+Organize p-values for multiple comparisons 
+```{r}
+Ps <- c(summary(Model_LH_tail)$coefficients[2,4],
+        summary(Model_LH_body)$coefficients[2,4],
+        summary(Model_LH_head)$coefficients[2,4],
+        summary(Model_LH_fissure)$coefficients[2,4],
+        summary(Model_LH_presubiculum)$coefficients[2,4],
+        summary(Model_LH_ML_HP)$coefficients[2,4],
+        summary(Model_LH_ML_ca4)$coefficients[2,4],
+        summary(Model_LH_ML_fimbria)$coefficients[2,4],
+        summary(Model_LH_ML_HATA)$coefficients[2,4],
+        summary(Model_RH_tail)$coefficients[2,4],
+        summary(Model_RH_body)$coefficients[2,4],
+        summary(Model_RH_head)$coefficients[2,4],
+        summary(Model_RH_fissure)$coefficients[2,4],
+        summary(Model_RH_presubiculum)$coefficients[2,4],
+        summary(Model_RH_ML_HP)$coefficients[2,4],
+        summary(Model_RH_ML_ca4)$coefficients[2,4],
+        summary(Model_RH_ML_fimbria)$coefficients[2,4],
+        summary(Model_RH_ML_HATA)$coefficients[2,4]
+        )
+Ps
+```
+
+Exploratory Analysis - No significant differences
+
+
+
+2a. Examine whether there are significant differences in hippocampal or amygdala volume at one-month post-trauma (T1) between the two trajectories (Recovery vs. chronic PTSD)?
+
+Organize data
+```{r}
+aseg_long <- aseg[grepl("long", aseg$Measure.volume),]
+aseg_long['sub'] <- (str_split_fixed(aseg_long$Measure.volume, ".long.", 2)[,2])
+aseg_long['time'] <- (str_split_fixed(aseg_long$Measure.volume, "_", 2)[,1])
+
+aseg_long <- merge(aseg_long, clinical[,1:5], by='sub')
+aseg_long_PTSD <- subset(aseg_long, Clinical_Trajectory > 1)
+
+#recode clinical trajectory and gender
+aseg_long_PTSD <- aseg_long_PTSD %>% 
+  mutate(Clinical_Trajectory = case_when(Clinical_Trajectory == 2 ~ "Recovery",
+                                         Clinical_Trajectory == 3 ~ "PTSD"),
+         Gender = case_when(Gender == 0 ~ "Male",
+                            Gender == 1 ~ "Female"))
+```
+
+LMM analysis - Whole amygdala & hippocampus over time (T1-T2-T3) across all individuals (disregarding trajectories)
+```{r}
+Model_LA_long_all <- lmer(Left.Amygdala ~ time + Age + Gender + EstimatedTotalIntraCranialVol +(1|sub), data = aseg_long_PTSD)
+
+Model_RA_long_all <- lmer(Right.Amygdala ~ time + Age + Gender + EstimatedTotalIntraCranialVol + (1|sub), data = aseg_long_PTSD)
+
+Model_LH_long_all <- lmer(Left.Hippocampus ~ time + Age + Gender + EstimatedTotalIntraCranialVol + (1|sub), data = aseg_long_PTSD)
+
+Model_RH_long_all <- lmer(Right.Hippocampus ~ time + Age + Gender + EstimatedTotalIntraCranialVol + (1|sub), data = aseg_long_PTSD)
+
+```
+
+```{r}
+summary(Model_LA_long_all)
+```
+
+```{r}
+emmeans(Model_LA_long_all, ~ time)
+```
+
+```{r}
+summary(Model_RA_long_all)
+```
+
+```{r}
+emmeans(Model_RA_long_all, ~ time)
+```
+
+```{r}
+summary(Model_LH_long_all)
+```
+
+```{r}
+emmeans(Model_LH_long_all, ~ time)
+```
+
+```{r}
+summary(Model_RH_long_all)
+```
+
+```{r}
+emmeans(Model_RH_long_all, ~time)
+```
+
+1a. Results: No significant main effect of time in Amygdala or Hippocampus. No significant change between T1 to T2 to T3 across all subjects. 
+
+
+1a. LMM analysis - Whole amygdala & hippocampus between trajectories (Recovery vs. Chronic PTSD)
+```{r}
+Model_LA_long <- lmer(Left.Amygdala ~ Clinical_Trajectory * time + Age + Gender + EstimatedTotalIntraCranialVol +(1|sub), data = aseg_long_PTSD)
+
+Model_RA_long <- lmer(Right.Amygdala ~ Clinical_Trajectory * time + Age + Gender + EstimatedTotalIntraCranialVol + (1|sub), data = aseg_long_PTSD)
+
+Model_LH_long <- lmer(Left.Hippocampus ~ Clinical_Trajectory * time + Age + Gender + EstimatedTotalIntraCranialVol + (1|sub), data = aseg_long_PTSD)
+
+Model_RH_long <- lmer(Right.Hippocampus ~ Clinical_Trajectory * time + Age + Gender + EstimatedTotalIntraCranialVol + (1|sub), data = aseg_long_PTSD)
+
+```
+
+```{r}
+summary(Model_LA_long)
+```
+
+```{r}
+emmeans(Model_LA_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+summary(Model_RA_long)
+```
+
+```{r}
+emmeans(Model_RA_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+summary(Model_LH_long)
+```
+
+```{r}
+emmeans(Model_LH_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+summary(Model_RH_long)
+```
+
+```{r}
+emmeans(Model_RH_long, ~ Clinical_Trajectory*time)
+```
+
+1a. Results: No significant interactions between trajectory and time in predicting Amygdala/Hippocampus volumes. That is, there is not a different change in time in the two groups in those regions. 
+
+
+1b. Amygdala & Hippocampus Subregions over time.
+
+Organize data
+```{r}
+hippocampus <- read.csv('./data/hippocampus.txt', sep = ' ')
+amygdala <- read.csv('./data/amygNuc.txt', sep = ' ')
+
+hippocampus['time'] <- str_split_fixed(hippocampus$Subject, "_", 2)[,1]
+hippocampus['sub']  <- str_split_fixed(hippocampus$Subject, "long.", 2)[,2]
+
+amygdala['time'] <- str_split_fixed(amygdala$Subject, "_", 2)[,1]
+amygdala['sub']  <- str_split_fixed(amygdala$Subject, "long.", 2)[,2]
+
+amygdala <- merge(amygdala, clinical[,1:5], by='sub')
+amygdala_PTSD <- subset(amygdala, Clinical_Trajectory > 1)
+
+hippocampus <- merge(hippocampus, clinical[,1:5], by='sub')
+hippocampus_PTSD <- subset(hippocampus, Clinical_Trajectory > 1)
+```
+
+Amygdala subregion LMM analysis
+Main subregions (n=4):
+Lateral nucleus
+Basal nucleus
+Central nucleus
+
+```{r}
+Model_LA_ln_long <- lmer(left_Lateral.nucleus ~  Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_LA_bn_long <- lmer(left_Basal.nucleus ~  Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_LA_cn_long <- lmer(left_Central.nucleus ~  Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_RA_ln_long <- lmer(right_Lateral.nucleus ~  Clinical_Trajectory * time + Age + Gender + right_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_RA_bn_long <- lmer(right_Basal.nucleus ~  Clinical_Trajectory * time + Age + Gender + right_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_RA_cn_long <- lmer(right_Central.nucleus ~ Clinical_Trajectory * time + Age + Gender + right_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+```
+
+
+```{r}
+summary(Model_LA_ln_long)
+```
+
+```{r}
+emmeans(Model_LA_ln_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+summary(Model_LA_bn_long)
+```
+
+```{r}
+emmeans(Model_LA_bn_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+summary(Model_LA_cn_long)
+```
+
+```{r}
+emmeans(Model_LA_cn_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+summary(Model_RA_ln_long)
+```
+
+```{r}
+emmeans(Model_RA_ln_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+summary(Model_RA_bn_long)
+```
+
+```{r}
+emmeans(Model_RA_bn_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+summary(Model_RA_cn_long)
+```
+
+```{r}
+emmeans(Model_RA_cn_long, ~ Clinical_Trajectory*time)
+```
+
+1.b. Results: Non-significant interactions or main effect of time, except for the left lateral nucleus, but will not survive FDR corrections. 
+
+Exploratory analysis of other amygdala sub-regions (n=6):
+```{r}
+
+Model_LA_ABn_long <- lmer(left_Accessory.Basal.nucleus ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_LA_AAA_long <- lmer(left_Anterior.amygdaloid.area.AAA ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_LA_mn_long <- lmer(left_Medial.nucleus ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_LA_con_long <- lmer(left_Cortical.nucleus ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_LA_ct_long <- lmer(left_Corticoamygdaloid.transitio ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_LA_pn_long <- lmer(left_Paralaminar.nucleus ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_RA_ABn_long <- lmer(right_Accessory.Basal.nucleus ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_RA_AAA_long <- lmer(right_Anterior.amygdaloid.area.AAA ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_RA_mn_long <- lmer(right_Medial.nucleus ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_RA_con_long <- lmer(right_Cortical.nucleus ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_RA_ct_long <- lmer(right_Corticoamygdaloid.transitio ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+
+Model_RA_pn_long <- lmer(right_Paralaminar.nucleus ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_amygdala + (1|sub), data = amygdala_PTSD)
+```
+
+```{r}
+print(summary(Model_LA_ABn_long))
+print(summary(Model_LA_AAA_long))
+print(summary(Model_LA_mn_long))
+print(summary(Model_LA_con_long))
+print(summary(Model_LA_ct_long))
+print(summary(Model_LA_pn_long))
+
+print(summary(Model_RA_ABn_long))
+print(summary(Model_RA_AAA_long))
+print(summary(Model_RA_mn_long))
+print(summary(Model_RA_con_long))
+print(summary(Model_RA_ct_long))
+print(summary(Model_RA_pn_long))
+```
+
+Hippocamal analysis
+
+Main regions - CA1, CA3, Subiculum, Dentate (n=4)
+
+```{r}
+hippocampus_PTSD['left_CA1'] = hippocampus_PTSD$left_CA1.body + hippocampus_PTSD$left_CA1.head
+hippocampus_PTSD['left_CA3'] = hippocampus_PTSD$left_CA3.body + hippocampus_PTSD$left_CA3.head
+hippocampus_PTSD['left_sub'] = hippocampus_PTSD$left_subiculum.body + hippocampus_PTSD$left_subiculum.head
+hippocampus_PTSD['left_DG'] = hippocampus_PTSD$left_GC.ML.DG.body + hippocampus_PTSD$left_GC.ML.DG.head
+hippocampus_PTSD['right_CA1'] = hippocampus_PTSD$right_CA1.body + hippocampus_PTSD$right_CA1.head
+hippocampus_PTSD['right_CA3'] = hippocampus_PTSD$right_CA3.body + hippocampus_PTSD$right_CA3.head
+hippocampus_PTSD['right_sub'] = hippocampus_PTSD$right_subiculum.body + hippocampus_PTSD$right_subiculum.head
+hippocampus_PTSD['right_DG'] = hippocampus_PTSD$right_GC.ML.DG.body + hippocampus_PTSD$right_GC.ML.DG.head
+```
+
+```{r}
+Model_LH_ca1_long <- lmer(left_CA1 ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_LH_ca3_long <- lmer(left_CA3 ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_LH_sub_long <- lmer(left_sub ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_LH_dg_long <- lmer(left_DG ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+
+Model_RH_ca1_long <- lmer(right_CA1 ~ 0 + Clinical_Trajectory * time + Age + Gender + right_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_RH_ca3_long <- lmer(right_CA3 ~ 0 + Clinical_Trajectory * time + Age + Gender + right_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_RH_sub_long <- lmer(right_sub ~ 0 + Clinical_Trajectory * time + Age + Gender + right_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_RH_dg_long <- lmer(right_DG ~ 0 + Clinical_Trajectory * time + Age + Gender + right_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+```
+
+```{r}
+summary(Model_LH_ca1_long)
+```
+
+```{r}
+emmeans(Model_LH_ca1_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+summary(Model_LH_ca3_long)
+```
+
+```{r}
+emmeans(Model_LH_ca3_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+pairs(emmeans(Model_LH_ca3_long, ~ Clinical_Trajectory*time))
+```
+
+```{r}
+summary(Model_LH_sub_long)
+```
+```{r}
+emmeans(Model_LH_sub_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+pairs(emmeans(Model_LH_sub_long, ~ Clinical_Trajectory*time))
+```
+
+```{r}
+summary(Model_LH_dg_long)
+```
+
+```{r}
+emmeans(Model_LH_dg_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+pairs(emmeans(Model_LH_dg_long, ~ Clinical_Trajectory*time))
+```
+
+```{r}
+summary(Model_RH_ca1_long)
+```
+
+```{r}
+emmeans(Model_RH_ca1_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+summary(Model_RH_ca3_long)
+```
+
+```{r}
+emmeans(Model_RH_ca3_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+summary(Model_RH_sub_long)
+```
+
+```{r}
+emmeans(Model_RH_sub_long, ~ Clinical_Trajectory*time)
+```
+
+```{r}
+summary(Model_RH_dg_long)
+```
+
+```{r}
+emmeans(Model_RH_dg_long, ~ Clinical_Trajectory*time)
+```
+
+
+Organize p-values for multiple comparisons 
+```{r}
+Ps <- c(summary(Model_LH_ca1_long)$coefficients[9,5],
+        summary(Model_LH_ca3_long)$coefficients[9,5],
+        summary(Model_LH_sub_long)$coefficients[9,5],
+        summary(Model_LH_dg_long)$coefficients[9,5],
+        summary(Model_RH_ca1_long)$coefficients[9,5],
+        summary(Model_RH_ca3_long)$coefficients[9,5],
+        summary(Model_RH_sub_long)$coefficients[9,5],
+        summary(Model_RH_dg_long)$coefficients[9,5]
+)
+Ps      
+```
+
+FDR correction for multiple comparisons 
+```{r}
+p.adjust(Ps, method = "fdr", n = length(Ps))
+```
+
+1.b Results: Significant Time by Group Interactions:
+-left CA3 (T3*group, p=0.0024,pFDR=0.0193) - Decrease over time in PTSD
+-left subiculum (T3*group, p=0.0052, pFDR=0.0208) - Increase over time in PTSD
+-left Dentate Gyrus (T3*group, p=0.0113, pFDR=0.0300) - Decrease over time in PTSD
+
+
+Exploratory
+other hippocampal subregions (n=9): hippocampal tail, body, head, hippocamapl fissure, presubiculum (head+body), parasubiculum, molecular layer HP (head+body), CA4 (head+body), fimbria, HATA
+
+```{r}
+hippocampus_PTSD['left_presubiculum'] = hippocampus_PTSD$left_presubiculum.body + hippocampus_PTSD$left_presubiculum.head
+hippocampus_PTSD['left_ML_HP'] = hippocampus_PTSD$left_molecular_layer_HP.body + hippocampus_PTSD$left_molecular_layer_HP.head
+hippocampus_PTSD['left_CA4'] = hippocampus_PTSD$left_CA4.body + hippocampus_PTSD$left_CA4.head
+
+hippocampus_PTSD['right_presubiculum'] = hippocampus_PTSD$right_presubiculum.body + hippocampus_PTSD$right_presubiculum.head
+hippocampus_PTSD['right_ML_HP'] = hippocampus_PTSD$right_molecular_layer_HP.body + hippocampus_PTSD$right_molecular_layer_HP.head
+hippocampus_PTSD['right_CA4'] = hippocampus_PTSD$right_CA4.body + hippocampus_PTSD$right_CA4.head
+```
+
+```{r}
+Model_LH_tail_long <- lmer(left_Hippocampal_tail ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_LH_body_long <- lmer(left_Whole_hippocampal_body ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_LH_head_long <- lmer(left_Whole_hippocampal_head ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_LH_fissure_long <- lmer(left_hippocampal.fissure ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_LH_presubiculum_long <- lmer(left_presubiculum ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_LH_ML_HP_long <- lmer(left_ML_HP ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_LH_CA4_long <- lmer(left_CA4 ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_LH_fimbria_long <- lmer(left_fimbria ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_LH_HATA_long <- lmer(left_HATA ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+
+Model_RH_tail_long <- lmer(right_Hippocampal_tail ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_RH_body_long <- lmer(right_Whole_hippocampal_body ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_RH_head_long <- lmer(right_Whole_hippocampal_head ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_RH_fissure_long <- lmer(right_hippocampal.fissure ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_RH_presubiculum_long <- lmer(right_presubiculum ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_RH_ML_HP_long <- lmer(right_ML_HP ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_RH_CA4_long <- lmer(right_CA4 ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_RH_fimbria_long <- lmer(right_fimbria ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+Model_RH_HATA_long <- lmer(right_HATA ~ 0 + Clinical_Trajectory * time + Age + Gender + left_Whole_hippocampus + (1|sub), data = hippocampus_PTSD)
+```
+
+
+```{r}
+print(summary(Model_LH_tail_long))
+print(summary(Model_LH_body_long))
+print(summary(Model_LH_head_long))
+print(summary(Model_LH_fissure_long))
+print(summary(Model_LH_presubiculum_long))
+print(summary(Model_LH_ML_HP_long))
+print(summary(Model_LH_CA4_long ))
+print(summary(Model_LH_fimbria_long))
+print(summary(Model_LH_HATA_long))
+
+print(summary(Model_RH_tail_long))
+print(summary(Model_RH_body_long))
+print(summary(Model_RH_head_long))
+print(summary(Model_RH_fissure_long))
+print(summary(Model_RH_presubiculum_long))
+print(summary(Model_RH_ML_HP_long))
+print(summary(Model_RH_CA4_long ))
+print(summary(Model_RH_fimbria_long))
+print(summary(Model_RH_HATA_long))
+```
+
